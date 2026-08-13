@@ -20,7 +20,9 @@ import type {
   JsonObject,
   JsonValue,
   RunOptions,
+  ToolkitRuntime,
 } from "@langgraph-toolkit/core";
+import { createToolkitRuntime } from "@langgraph-toolkit/core";
 
 // ---------- Host interfaces (StruxJS shapes, declared locally) ----------
 
@@ -98,8 +100,9 @@ function isCompiledGraph(candidate: ScannedCandidate): candidate is { readonly d
 
 /**
  * Convention scanner: every directory inside agentsRoot containing an
- * index.js that default-exports a GraphDefinition or compiled graph becomes
- * a registered workflow.
+ * index.js or index.ts that default-exports a GraphDefinition or compiled
+ * graph becomes a registered workflow. index.ts support keeps tsx-based local
+ * development faithful to the emitted Node ESM layout.
  */
 export async function scanAgents(agentsRoot: string): Promise<ScanResult[]> {
   const results: ScanResult[] = [];
@@ -109,10 +112,12 @@ export async function scanAgents(agentsRoot: string): Promise<ScanResult[]> {
     const fullPath = join(agentsRoot, entry);
     const s = await stat(fullPath).catch(() => null);
     if (!s?.isDirectory()) continue;
-    const indexPath = join(fullPath, "index.js");
+    const javascriptIndex = join(fullPath, "index.js");
+    const typescriptIndex = join(fullPath, "index.ts");
+    const indexPath = existsSync(javascriptIndex) ? javascriptIndex : typescriptIndex;
     let definition: GraphDefinition<JsonObject> | null = null;
     let error: Error | undefined;
-    if (existsSync(indexPath)) {
+    if (indexPath.length > 0 && existsSync(indexPath)) {
       try {
         const mod = await import(indexPath) as ScannedModule;
         const candidate = mod.default ?? mod.graph;
@@ -121,7 +126,7 @@ export async function scanAgents(agentsRoot: string): Promise<ScanResult[]> {
         } else if (candidate && isCompiledGraph(candidate)) {
           definition = candidate.definition;
         } else {
-          error = new Error("index.js does not export a GraphDefinition");
+          error = new Error("agent index does not export a GraphDefinition");
         }
       } catch (err) {
         error = err instanceof Error ? err : new Error(String(err));
@@ -132,6 +137,29 @@ export async function scanAgents(agentsRoot: string): Promise<ScanResult[]> {
   return results;
 }
 
+/** Result of scanning and registering convention-based StruxJS graph resources. */
+export interface ScanAndRegisterResult {
+  readonly runtime: ToolkitRuntime;
+  readonly results: readonly ScanResult[];
+}
+
+/**
+ * Scan app/Agents, register every valid definition, and return one runtime
+ * facade. Invalid candidates remain visible in `results` for diagnostics.
+ */
+export async function scanAndRegisterAgents(
+  agentsRoot: string,
+  runtime: ToolkitRuntime = createToolkitRuntime(),
+): Promise<ScanAndRegisterResult> {
+  const results = await scanAgents(agentsRoot);
+  for (const result of results) {
+    if (result.definition !== null && !runtime.has(result.definition.name)) {
+      runtime.register(result.definition);
+    }
+  }
+  return { runtime, results };
+}
+
 // ---------- ServiceProvider ----------
 
 /** StruxJS ServiceProvider that exposes the graph registry under langgraph. */
@@ -139,6 +167,10 @@ export class LangGraphServiceProvider implements StruxServiceProviderShape {
   static readonly bindings = ["langgraph", "ai.llm"] as const;
 
   private registry: GraphRegistry | null = null;
+
+  constructor(runtime?: ToolkitRuntime) {
+    this.registry = runtime ?? null;
+  }
 
   getRegistry(): GraphRegistry {
     if (!this.registry) throw new Error("LangGraphManager not bootstrapped yet");
@@ -182,8 +214,7 @@ export async function streamGraphToReply(
   input: JsonObject,
   opts?: Pick<RunOptions, "threadId" | "signal">,
 ): Promise<void> {
-  const compiled = registry.get<JsonObject, JsonObject>(graphName);
-  if (!compiled) {
+  if (!registry.has(graphName)) {
     reply.write?.(encodeSseEvent("error", { message: `Graph "${graphName}" not registered` }));
     reply.end?.();
     return;
@@ -192,7 +223,7 @@ export async function streamGraphToReply(
   reply.setHeader?.("Cache-Control", "no-cache");
   const writer = reply.raw ?? reply;
   try {
-    const events = compiled.stream(input, opts);
+    const events = registry.stream(graphName, input, opts);
     for await (const event of events) {
       writer.write?.(encodeSseEvent(event.type, event));
       if (event.type === "error" || event.type === "cancelled") break;
