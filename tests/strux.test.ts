@@ -48,14 +48,13 @@ describe("scanAgents (StruxJS convention scanner)", () => {
     const dir = join(root, "admin-chat");
     await mkdir(dir);
     // Write an ESM module that default-exports the plain definition.
-    // Export the compiled graph under both shapes the scanner accepts:
-    // default (definition with .name/.nodes) and named `graph`.
-    await writeFile(join(dir, "index.js"), `import { compile, attachExecutor } from "@langgraph-toolkit/core";
+    // The fixture intentionally has no package import because it is loaded
+    // from a temporary directory outside the test workspace. Export the
+    // compiled graph shape as metadata only; scanner behavior is the subject.
+    await writeFile(join(dir, "index.js"), `
 const def = ${JSON.stringify(agentDef, (_k, v) => (typeof v === "function" ? undefined : v))};
 def.nodes = { start: async () => ({ done: true }) };
-const compiled = attachExecutor(compile(def));
 export default def;
-export const graph = compiled;
 `);
     const results = await scanAgents(root);
     expect(results).toHaveLength(1);
