@@ -10,7 +10,7 @@ import {
   GraphRegistry,
   messagesValue,
   type GraphDefinition,
-} from "@langgraph/toolkit";
+} from "@langgraph-toolkit/core";
 import { LangGraphServiceProvider, StruxCheckpointer, scanAgents } from "../src/index.js";
 
 interface State {
@@ -50,7 +50,7 @@ describe("scanAgents (StruxJS convention scanner)", () => {
     // Write an ESM module that default-exports the plain definition.
     // Export the compiled graph under both shapes the scanner accepts:
     // default (definition with .name/.nodes) and named `graph`.
-    await writeFile(join(dir, "index.js"), `import { compile, attachExecutor } from "@langgraph/toolkit";
+    await writeFile(join(dir, "index.js"), `import { compile, attachExecutor } from "@langgraph-toolkit/core";
 const def = ${JSON.stringify(agentDef, (_k, v) => (typeof v === "function" ? undefined : v))};
 def.nodes = { start: async () => ({ done: true }) };
 const compiled = attachExecutor(compile(def));

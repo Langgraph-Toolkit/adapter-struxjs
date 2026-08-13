@@ -1,5 +1,5 @@
 /**
- * @langgraph/adapter-struxjs
+ * @langgraph-toolkit/adapter-struxjs
  *
  * StruxJS binding: ServiceProvider that registers a LangGraphManager,
  * convention-based AgentScanner over app/Agents/, a Strux-flavored
@@ -20,7 +20,7 @@ import type {
   JsonObject,
   JsonValue,
   RunOptions,
-} from "@langgraph/toolkit";
+} from "@langgraph-toolkit/core";
 
 // ---------- Host interfaces (StruxJS shapes, declared locally) ----------
 
