@@ -81,10 +81,17 @@ export interface ScanResult {
   name: string;
   /** Graph definition loaded from <path>/index.js; null if absent or failing. */
   definition: GraphDefinition<JsonObject> | null;
+  /** Runtime owned by a resource facade, when the module exports one. */
+  runtime?: ToolkitRuntime;
   error?: Error;
 }
 
-type ScannedCandidate = GraphDefinition<JsonObject> | { readonly definition: GraphDefinition<JsonObject> };
+interface ScannedResource {
+  readonly graph: CompiledGraph<JsonObject>;
+  readonly runtime: ToolkitRuntime;
+}
+
+type ScannedCandidate = GraphDefinition<JsonObject> | { readonly definition: GraphDefinition<JsonObject> } | ScannedResource;
 interface ScannedModule {
   readonly default?: ScannedCandidate;
   readonly graph?: ScannedCandidate;
@@ -96,6 +103,10 @@ function isGraphDefinition(candidate: ScannedCandidate): candidate is GraphDefin
 
 function isCompiledGraph(candidate: ScannedCandidate): candidate is { readonly definition: GraphDefinition<JsonObject> } {
   return "definition" in candidate;
+}
+
+function isScannedResource(candidate: ScannedCandidate): candidate is ScannedResource {
+  return "graph" in candidate && "runtime" in candidate;
 }
 
 /**
@@ -116,12 +127,16 @@ export async function scanAgents(agentsRoot: string): Promise<ScanResult[]> {
     const typescriptIndex = join(fullPath, "index.ts");
     const indexPath = existsSync(javascriptIndex) ? javascriptIndex : typescriptIndex;
     let definition: GraphDefinition<JsonObject> | null = null;
+    let runtime: ToolkitRuntime | undefined;
     let error: Error | undefined;
     if (indexPath.length > 0 && existsSync(indexPath)) {
       try {
         const mod = await import(indexPath) as ScannedModule;
         const candidate = mod.default ?? mod.graph;
-        if (candidate && isGraphDefinition(candidate)) {
+        if (candidate && isScannedResource(candidate)) {
+          definition = candidate.graph.definition;
+          runtime = candidate.runtime;
+        } else if (candidate && isGraphDefinition(candidate)) {
           definition = candidate;
         } else if (candidate && isCompiledGraph(candidate)) {
           definition = candidate.definition;
@@ -132,7 +147,7 @@ export async function scanAgents(agentsRoot: string): Promise<ScanResult[]> {
         error = err instanceof Error ? err : new Error(String(err));
       }
     }
-    results.push({ path: fullPath, name: entry, definition, error });
+    results.push({ path: fullPath, name: entry, definition, runtime, error });
   }
   return results;
 }
@@ -149,15 +164,21 @@ export interface ScanAndRegisterResult {
  */
 export async function scanAndRegisterAgents(
   agentsRoot: string,
-  runtime: ToolkitRuntime = createToolkitRuntime(),
+  runtime?: ToolkitRuntime,
 ): Promise<ScanAndRegisterResult> {
   const results = await scanAgents(agentsRoot);
+  const targetRuntime = runtime ?? results.find((result) => result.runtime !== undefined)?.runtime ?? createToolkitRuntime();
   for (const result of results) {
-    if (result.definition !== null && !runtime.has(result.definition.name)) {
-      runtime.register(result.definition);
+    if (result.definition !== null && !targetRuntime.has(result.definition.name)) {
+      if (result.runtime !== undefined && result.runtime !== targetRuntime) {
+        const compiled = result.runtime.get(result.definition.name);
+        if (compiled !== undefined && !targetRuntime.has(compiled.name)) targetRuntime.add(compiled);
+      } else {
+        targetRuntime.register(result.definition);
+      }
     }
   }
-  return { runtime, results };
+  return { runtime: targetRuntime, results };
 }
 
 // ---------- ServiceProvider ----------

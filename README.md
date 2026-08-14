@@ -1,11 +1,11 @@
 # @langgraph-toolkit/adapter-struxjs
 
-StruxJS lifecycle adapter for Langgraph-Toolkit. It registers graph providers during application bootstrap, scans agent folders, and streams graph events through a Strux-compatible reply object.
+**Use StruxJS lifecycle conventions without coupling the graph to StruxJS.** This adapter registers graph providers during application bootstrap, scans agent folders, and streams graph events through a Strux-compatible reply object.
 
 ## Install
 
 ```bash
-npm install struxjs @langgraph-toolkit/core @langgraph-toolkit/adapter-struxjs
+npm install struxjs-core @langgraph-toolkit/core @langgraph-toolkit/adapter-struxjs
 ```
 
 ## Provider lifecycle
@@ -22,11 +22,32 @@ await scanAndRegisterAgents("./app/Agents", provider.getRegistry(), runtime);
 await provider.boot(app);
 ```
 
-The adapter also exports `scanAgents`, `ScanAgentsCommand`, `ListGraphsCommand`, `streamGraphToReply`, `encodeSseEvent`, `StruxCheckpointer`, `loadDotenv`, and the typed Strux service-provider contracts. The scanner expects each agent folder to export a graph definition or runtime resource rather than a framework-specific singleton.
+The scanner accepts either a plain graph definition or a resource facade. For a resource facade, export the ready resource as the folder's default export so the scanner can preserve its `ToolkitRuntime`, MCP gateway, model registry, and lifecycle ownership:
+
+```ts
+import { createDatabaseChatResource } from "./resource.js";
+
+const databaseChat = await createDatabaseChatResource();
+export default databaseChat;
+```
+
+It does not require a framework-specific singleton, and the resource can be reused by another host adapter.
+
+## Why the structure stays portable
+
+| Concern | StruxJS adapter | Core or resource |
+|---|---|---|
+| Application bootstrap and provider registration | Yes | No |
+| Agent folder scanning | Yes | No |
+| SSE or reply serialization | Yes | No |
+| State, nodes, edges, gates, interrupts | No | Core |
+| MCP, model, policy, checkpoint defaults | No | Resource/runtime |
+
+The adapter also exports `scanAgents`, `ScanAgentsCommand`, `ListGraphsCommand`, `streamGraphToReply`, `encodeSseEvent`, `StruxCheckpointer`, `loadDotenv`, and typed service-provider contracts.
 
 ## HTTP and checkpoint support
 
-`streamGraphToReply` writes `text/event-stream` headers and serializes step, tool, interrupt, and terminal events. `StruxCheckpointer` is a deterministic in-memory checkpointer for local development. Production applications can inject a checkpointer from the checkpointer adapter package.
+`streamGraphToReply` writes `text/event-stream` headers and serializes step, tool, interrupt, thinking, token, and terminal events. `StruxCheckpointer` is a deterministic in-memory checkpointer for local development. Production applications can inject a driver from `@langgraph-toolkit/adapter-checkpointers`.
 
 ## Development
 
@@ -36,7 +57,7 @@ npm run build
 npm test
 ```
 
-The Strux example is scaffolded with the StruxJS CLI and includes `bootstrap.ts`, `.env.example`, `app/Agents/database-chat`, and lifecycle tests.
+Start a host from the official CLI with `npx create-struxjs-app database-chat`, then add the adapter and the resource from `examples/projects/strux`.
 
 ## License
 
