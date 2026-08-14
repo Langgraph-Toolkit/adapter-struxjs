@@ -7,14 +7,17 @@ import {
   node,
   edge,
   safety,
-  GraphRegistry,
   messagesValue,
+  type ChatMessage,
   type GraphDefinition,
 } from "@langgraph-toolkit/core";
-import { LangGraphServiceProvider, StruxCheckpointer, scanAgents } from "../src/index.js";
+import { GraphRegistry } from "@langgraph-toolkit/core/runtime";
+import { scanAgents } from "../src/scanner.js";
+import { StruxCheckpointer } from "../src/checkpointer.js";
+import { LangGraphServiceProvider } from "../src/internal.js";
 
 interface State {
-  messages: unknown[];
+  messages: readonly ChatMessage[];
   done: boolean;
 }
 
@@ -22,9 +25,8 @@ const agentDef = defineGraph<State>({
   name: "ping",
   state: {
     messages: messagesValue(),
-    done: false as never,
-  } as never,
-  stateDefaults: { done: false as never },
+    done: false,
+  },
   nodes: {
     start: node(async () => ({ done: true })),
   },

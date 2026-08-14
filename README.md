@@ -13,12 +13,12 @@ npm install struxjs-core @langgraph-toolkit/core @langgraph-toolkit/adapter-stru
 ```ts
 import {
   LangGraphServiceProvider,
-  scanAndRegisterAgents,
+  registerAgents,
 } from "@langgraph-toolkit/adapter-struxjs";
 
 const provider = new LangGraphServiceProvider(runtime);
 provider.register(app);
-await scanAndRegisterAgents("./app/Agents", provider.getRegistry(), runtime);
+await registerAgents("./app/Agents", provider.getRegistry(), runtime);
 await provider.boot(app);
 ```
 
@@ -43,11 +43,17 @@ It does not require a framework-specific singleton, and the resource can be reus
 | State, nodes, edges, gates, interrupts | No | Core |
 | MCP, model, policy, checkpoint defaults | No | Resource/runtime |
 
-The adapter also exports `scanAgents`, `ScanAgentsCommand`, `ListGraphsCommand`, `streamGraphToReply`, `encodeSseEvent`, `StruxCheckpointer`, `loadDotenv`, and typed service-provider contracts.
+The root adapter surface keeps application lifecycle small: `registerAgents` and `streamReply`, together with the typed service-provider contracts. Advanced concerns use explicit subpaths: `scanAgents` from `@langgraph-toolkit/adapter-struxjs/scanner`, command classes from `/commands`, `loadDotenv` from `/dotenv`, and `StruxCheckpointer` from `/checkpointer`. This keeps the common import readable while preserving extension points for contributors.
+
+```ts
+import { registerAgents, streamReply } from "@langgraph-toolkit/adapter-struxjs";
+import { scanAgents } from "@langgraph-toolkit/adapter-struxjs/scanner";
+import { StruxCheckpointer } from "@langgraph-toolkit/adapter-struxjs/checkpointer";
+```
 
 ## HTTP and checkpoint support
 
-`streamGraphToReply` writes `text/event-stream` headers and serializes step, tool, interrupt, thinking, token, and terminal events. `StruxCheckpointer` is a deterministic in-memory checkpointer for local development. Production applications can inject a driver from `@langgraph-toolkit/adapter-checkpointers`.
+`streamReply` writes `text/event-stream` headers and serializes step, tool, interrupt, thinking, token, and terminal events. `StruxCheckpointer` is a deterministic in-memory checkpointer for local development. Production applications can inject a driver from `@langgraph-toolkit/adapter-checkpointers`.
 
 ## Development
 

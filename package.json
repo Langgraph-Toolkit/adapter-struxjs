@@ -1,6 +1,6 @@
 {
   "name": "@langgraph-toolkit/adapter-struxjs",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "StruxJS binding for @langgraph-toolkit/core: ServiceProvider, AgentScanner, checkpoint, SSE.",
   "type": "module",
   "main": "./dist/index.js",
@@ -9,6 +9,22 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./scanner": {
+      "types": "./dist/scanner.d.ts",
+      "import": "./dist/scanner.js"
+    },
+    "./commands": {
+      "types": "./dist/commands.d.ts",
+      "import": "./dist/commands.js"
+    },
+    "./dotenv": {
+      "types": "./dist/dotenv.d.ts",
+      "import": "./dist/dotenv.js"
+    },
+    "./checkpointer": {
+      "types": "./dist/checkpointer.d.ts",
+      "import": "./dist/checkpointer.js"
     }
   },
   "files": [
@@ -19,7 +35,7 @@
     "build": "tsc"
   },
   "dependencies": {
-    "@langgraph-toolkit/core": "0.1.2"
+    "@langgraph-toolkit/core": "0.2.0"
   },
   "peerDependencies": {
     "struxjs-core": ">=1.0.0"
