@@ -21,8 +21,8 @@ import type {
   RunOptions,
 } from "@langgraph-toolkit/core";
 import { ToolkitRuntime } from "@langgraph-toolkit/core/runtime";
-import type { GraphRegistry } from "@langgraph-toolkit/core/runtime";
-import { createToolkitRuntime } from "@langgraph-toolkit/core/runtime";
+import type { GraphLifecycle, GraphRegistry } from "@langgraph-toolkit/core/runtime";
+import { createGraphLifecycle, createToolkitRuntime } from "@langgraph-toolkit/core/runtime";
 
 // ---------- Host interfaces (StruxJS shapes, declared locally) ----------
 
@@ -57,6 +57,8 @@ export interface StruxJSAdapterOptions {
 export interface StruxJSAdapter<TGraph extends object = object> {
   readonly graph: TGraph;
   readonly runtime: ToolkitRuntime;
+  /** Canonical lifecycle consumed by Strux HTTP resources and controllers. */
+  readonly lifecycle: GraphLifecycle;
   readonly provider: LangGraphServiceProvider;
   /** Constructor form for composing this provider with other StruxJS providers. */
   readonly providerClass: new () => LangGraphServiceProvider;
@@ -203,14 +205,22 @@ export class LangGraphServiceProvider implements StruxServiceProviderShape {
   static readonly bindings = ["langgraph", "ai.llm"] as const;
 
   private registry: GraphRegistry | null = null;
+  private lifecycle: GraphLifecycle | null = null;
 
   constructor(runtime?: ToolkitRuntime) {
     this.registry = runtime ?? null;
+    this.lifecycle = runtime === undefined ? null : createGraphLifecycle(runtime);
   }
 
   getRegistry(): GraphRegistry {
     if (!this.registry) throw new Error("LangGraphManager not bootstrapped yet");
     return this.registry;
+  }
+
+  /** Resolve the canonical lifecycle without coupling a Strux controller to Core internals. */
+  getLifecycle(): GraphLifecycle {
+    if (!this.lifecycle) throw new Error("LangGraphManager not bootstrapped yet");
+    return this.lifecycle;
   }
 
   register(_app: StruxApplication): void {
@@ -224,6 +234,7 @@ export class LangGraphServiceProvider implements StruxServiceProviderShape {
   /** Host apps call this to resolve the registry from their container. */
   resolve(registry: GraphRegistry): void {
     this.registry = registry;
+    this.lifecycle = createGraphLifecycle(registry);
   }
 }
 
@@ -237,9 +248,11 @@ export function createStruxJSAdapter<TGraph extends object>(graph: TGraph, optio
     }
   }
   const provider = new BoundLangGraphServiceProvider();
+  const lifecycle = provider.getLifecycle();
   return {
     graph,
     runtime,
+    lifecycle,
     provider,
     providerClass: BoundLangGraphServiceProvider,
     register: (app) => app.registerProviders([BoundLangGraphServiceProvider]),

@@ -1,6 +1,6 @@
 {
   "name": "@langgraph-toolkit/adapter-struxjs",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "StruxJS binding for @langgraph-toolkit/core: ServiceProvider, AgentScanner, checkpoint, SSE.",
   "type": "module",
   "main": "./dist/index.js",
@@ -35,7 +35,7 @@
     "build": "tsc"
   },
   "dependencies": {
-    "@langgraph-toolkit/core": "0.2.0"
+    "@langgraph-toolkit/core": "0.2.1"
   },
   "peerDependencies": {
     "struxjs-core": ">=1.0.0"
