@@ -1,6 +1,6 @@
 # @langgraph-toolkit/adapter-struxjs
 
-**Use StruxJS lifecycle conventions without coupling the graph to StruxJS.** This adapter registers graph providers during application bootstrap, scans agent folders, and streams graph events through a Strux-compatible reply object.
+**Use StruxJS lifecycle conventions without coupling the graph to StruxJS.** The adapter registers graph providers during bootstrap, scans agent folders, and streams graph events through a Strux-compatible reply object.
 
 ## Install
 
@@ -8,52 +8,30 @@
 npm install struxjs-core @langgraph-toolkit/core @langgraph-toolkit/adapter-struxjs
 ```
 
-## Provider lifecycle
+## Zero-config factory
 
 ```ts
-import {
-  LangGraphServiceProvider,
-  registerAgents,
-} from "@langgraph-toolkit/adapter-struxjs";
+import { createStruxJSAdapter } from "@langgraph-toolkit/adapter-struxjs";
+import { resource } from "./resource.js";
 
-const provider = new LangGraphServiceProvider(runtime);
-provider.register(app);
-await registerAgents("./app/Agents", provider.getRegistry(), runtime);
-await provider.boot(app);
+const adapter = createStruxJSAdapter(resource.runtime);
+
+adapter.provider.register(app);
+await adapter.provider.boot(app);
 ```
 
-The scanner accepts either a plain graph definition or a resource facade. For a resource facade, export the ready resource as the folder's default export so the scanner can preserve its `ToolkitRuntime`, MCP gateway, model registry, and lifecycle ownership:
+The factory returns `{ graph, runtime, provider }`. The provider preserves the StruxJS registration and lifecycle hooks while the graph resource remains reusable by other hosts.
 
-```ts
-import { createDatabaseChatResource } from "./resource.js";
+## Scanner and native escape hatches
 
-const databaseChat = await createDatabaseChatResource();
-export default databaseChat;
-```
-
-It does not require a framework-specific singleton, and the resource can be reused by another host adapter.
-
-## Why the structure stays portable
-
-| Concern | StruxJS adapter | Core or resource |
-|---|---|---|
-| Application bootstrap and provider registration | Yes | No |
-| Agent folder scanning | Yes | No |
-| SSE or reply serialization | Yes | No |
-| State, nodes, edges, gates, interrupts | No | Core |
-| MCP, model, policy, checkpoint defaults | No | Resource/runtime |
-
-The root adapter surface keeps application lifecycle small: `registerAgents` and `streamReply`, together with the typed service-provider contracts. Advanced concerns use explicit subpaths: `scanAgents` from `@langgraph-toolkit/adapter-struxjs/scanner`, command classes from `/commands`, `loadDotenv` from `/dotenv`, and `StruxCheckpointer` from `/checkpointer`. This keeps the common import readable while preserving extension points for contributors.
+For folder discovery, use `registerAgents` and export a ready resource as the folder default export. For custom routing or contributor tooling, use `scanAgents` from `/scanner`, `streamReply` from the root, command classes from `/commands`, `loadDotenv` from `/dotenv`, and `StruxCheckpointer` from `/checkpointer`.
 
 ```ts
 import { registerAgents, streamReply } from "@langgraph-toolkit/adapter-struxjs";
 import { scanAgents } from "@langgraph-toolkit/adapter-struxjs/scanner";
-import { StruxCheckpointer } from "@langgraph-toolkit/adapter-struxjs/checkpointer";
 ```
 
-## HTTP and checkpoint support
-
-`streamReply` writes `text/event-stream` headers and serializes step, tool, interrupt, thinking, token, and terminal events. `StruxCheckpointer` is a deterministic in-memory checkpointer for local development. Production applications can inject a driver from `@langgraph-toolkit/adapter-checkpointers`.
+StruxJS owns application bootstrap and provider registration. Core owns state, nodes, edges, gates, interrupts, and typed events. MCP, Community, and persistence remain independent boundaries.
 
 ## Development
 
@@ -62,8 +40,6 @@ npm install
 npm run build
 npm test
 ```
-
-Start a host from the official CLI with `npx create-struxjs-app database-chat`, then add the adapter and the resource from `examples/projects/strux`.
 
 ## License
 

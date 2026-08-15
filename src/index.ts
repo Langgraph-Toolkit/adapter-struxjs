@@ -5,11 +5,14 @@
  * at the root; convention scanners, commands, dotenv loading, and checkpoint
  * implementations are explicit subpaths.
  */
-export { registerAgents, streamReply } from "./internal.js";
+export { createStruxJSAdapter, registerAgents, streamReply } from "./internal.js";
 export type {
   AgentScan,
+  StruxJSAdapter,
+  StruxJSAdapterOptions,
   StruxApplication,
   StruxConfigDriver,
+  LangGraphServiceProvider,
   StruxProviderRegistration,
   StruxReply,
   StruxServiceProviderShape,

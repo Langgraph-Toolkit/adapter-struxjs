@@ -8,13 +8,12 @@ import {
   edge,
   safety,
   messagesValue,
-  type ChatMessage,
-  type GraphDefinition,
-} from "@langgraph-toolkit/core";
+} from "@langgraph-toolkit/core/legacy";
+import type { ChatMessage, GraphDefinition } from "@langgraph-toolkit/core";
 import { GraphRegistry } from "@langgraph-toolkit/core/runtime";
 import { scanAgents } from "../src/scanner.js";
 import { StruxCheckpointer } from "../src/checkpointer.js";
-import { LangGraphServiceProvider } from "../src/internal.js";
+import { createStruxJSAdapter, LangGraphServiceProvider } from "../src/internal.js";
 
 interface State {
   messages: readonly ChatMessage[];
@@ -93,5 +92,13 @@ describe("LangGraphServiceProvider", () => {
     expect(LangGraphServiceProvider.bindings).toContain("langgraph");
     expect(() => provider.resolve(new GraphRegistry())).not.toThrow();
     expect(provider.getRegistry().list()).toEqual([]);
+  });
+
+  it("creates a provider resource from an existing registry", () => {
+    const registry = new GraphRegistry();
+    const adapter = createStruxJSAdapter(registry);
+    expect(adapter.runtime.list()).toEqual([]);
+    expect(adapter.provider.getRegistry()).toBe(adapter.runtime);
+    expect(adapter.providerClass).toBeTypeOf("function");
   });
 });

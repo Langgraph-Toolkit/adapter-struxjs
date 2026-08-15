@@ -20,7 +20,8 @@ import type {
   JsonValue,
   RunOptions,
 } from "@langgraph-toolkit/core";
-import type { GraphRegistry, ToolkitRuntime } from "@langgraph-toolkit/core/runtime";
+import { ToolkitRuntime } from "@langgraph-toolkit/core/runtime";
+import type { GraphRegistry } from "@langgraph-toolkit/core/runtime";
 import { createToolkitRuntime } from "@langgraph-toolkit/core/runtime";
 
 // ---------- Host interfaces (StruxJS shapes, declared locally) ----------
@@ -45,6 +46,21 @@ export interface StruxConfigDriver {
 export interface StruxServiceProviderShape {
   register(app: StruxApplication): void;
   boot?(app: StruxApplication): Promise<void>;
+}
+
+/** Zero-config options for createStruxJSAdapter(). */
+export interface StruxJSAdapterOptions {
+  readonly runtime?: ToolkitRuntime;
+}
+
+/** StruxJS resource returned by createStruxJSAdapter(). */
+export interface StruxJSAdapter<TGraph extends object = object> {
+  readonly graph: TGraph;
+  readonly runtime: ToolkitRuntime;
+  readonly provider: LangGraphServiceProvider;
+  /** Constructor form for composing this provider with other StruxJS providers. */
+  readonly providerClass: new () => LangGraphServiceProvider;
+  readonly register: (app: StruxApplication) => void;
 }
 
 // ---------- Checkpointer ----------
@@ -209,6 +225,48 @@ export class LangGraphServiceProvider implements StruxServiceProviderShape {
   resolve(registry: GraphRegistry): void {
     this.registry = registry;
   }
+}
+
+/** Create a StruxJS provider and runtime bound to one graph resource. */
+export function createStruxJSAdapter<TGraph extends object>(graph: TGraph, options: StruxJSAdapterOptions = {}): StruxJSAdapter<TGraph> {
+  const runtime = options.runtime ?? (graph instanceof ToolkitRuntime ? graph : createToolkitRuntime());
+  if (runtime !== graph) addGraph(runtime, graph);
+  class BoundLangGraphServiceProvider extends LangGraphServiceProvider {
+    constructor() {
+      super(runtime);
+    }
+  }
+  const provider = new BoundLangGraphServiceProvider();
+  return {
+    graph,
+    runtime,
+    provider,
+    providerClass: BoundLangGraphServiceProvider,
+    register: (app) => app.registerProviders([BoundLangGraphServiceProvider]),
+  };
+}
+
+function addGraph<TGraph extends object>(runtime: ToolkitRuntime, graph: TGraph): void {
+  const source = graph as object;
+  const collection = source as { readonly list?: () => string[]; readonly get?: (name: string) => CompiledGraph<object> | undefined };
+  if (typeof collection.list === "function" && typeof collection.get === "function") {
+    for (const name of collection.list()) {
+      const compiled = collection.get(name);
+      if (compiled && !runtime.has(compiled.name)) runtime.add(compiled);
+    }
+    return;
+  }
+  const executable = source as { readonly name?: string; readonly definition?: GraphDefinition<object>; readonly run?: (input: object) => Promise<object>; readonly stream?: (input: object) => AsyncIterable<object> };
+  if (typeof executable.name === "string" && executable.definition !== undefined && typeof executable.run === "function" && typeof executable.stream === "function") {
+    runtime.add(graph as CompiledGraph<object>);
+    return;
+  }
+  const builder = source as { readonly build?: () => CompiledGraph<object> };
+  if (typeof builder.build === "function") {
+    runtime.add(builder.build());
+    return;
+  }
+  throw new Error("createStruxJSAdapter requires a compiled graph, graph builder, runtime, or registry.");
 }
 
 // ---------- SSE middleware (Strux reply shape) ----------
